@@ -796,8 +796,10 @@ class World {
 			_updateContacts();
 			var c:Contact = _contactManager._contactList;
 			M.list_foreach(c, _next, {
-				if (c._s1._isTrigger || c._s2._isTrigger) {
-					c._triggering = true;
+				if (c._triggering) {
+					for (i in 1...c._manifold._numPoints) {
+						c._manifold._points[i]._clear();
+					}
 					c._manifold._numPoints = 1;
 				}
 			});
