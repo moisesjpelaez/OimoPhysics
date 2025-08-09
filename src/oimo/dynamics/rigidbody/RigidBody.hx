@@ -74,8 +74,6 @@ class RigidBody {
 	public var _addedToIsland:Bool;
 	public var _gravityScale:Float;
 
-	public var _isTrigger:Bool;
-
 	/**
 	 * Extra field that users can use for their own purposes.
 	 */
@@ -845,13 +843,6 @@ class RigidBody {
 	}
 
 	/**
-	 * Sets if the body is a trigger or not.
-	 */
-	public inline function setIsTrigger(isTrigger:Bool) {
-		_isTrigger = isTrigger;
-	}
-
-	/**
 	 * Returns the local coordinates of the point `worldPoint` in world coodinates.
 	 */
 	public inline function getLocalPoint(worldPoint:Vec3):Vec3 {
@@ -1018,7 +1009,7 @@ class RigidBody {
 		if (_world != null) {
 			_world._removeShape(shape);
 		}
-		
+
 		// then, remove the shape from the linked list so that it will be ignored
 		M.list_remove(_shapeList, _shapeListLast, _prev, _next, shape);
 		_numShapes--;

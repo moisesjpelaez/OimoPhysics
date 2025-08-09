@@ -229,7 +229,7 @@ class Contact {
 				_updater.totalUpdate(result, _b1._transform, _b2._transform);
 			}
 
-			if (_s1._rigidBody._isTrigger || _s2._rigidBody._isTrigger) _triggering = true;
+			if (_s1._isTrigger || _s2._isTrigger) _triggering = true;
 		} else {
 			_manifold._clear();
 		}
