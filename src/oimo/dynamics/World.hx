@@ -794,15 +794,6 @@ class World {
 
 		Performance.totalTime = M.profile({
 			_updateContacts();
-			var c:Contact = _contactManager._contactList;
-			M.list_foreach(c, _next, {
-				if (c._triggering) {
-					for (i in 1...c._manifold._numPoints) {
-						c._manifold._points[i]._clear();
-					}
-					c._manifold._numPoints = 1;
-				}
-			});
 			_solveIslands();
 		});
 	}

@@ -67,6 +67,7 @@ class Contact {
 		_updater = new ManifoldUpdater(_manifold);
 		_contactConstraint = new ContactConstraint(_manifold);
 		_touching = false;
+		_triggering = false;
 	}
 
 	// --- private ---
@@ -161,6 +162,7 @@ class Contact {
 		_b1 = s1._rigidBody;
 		_b2 = s2._rigidBody;
 		_touching = false;
+		_triggering = false;
 		attachLinks();
 
 		_detector = detector;
@@ -203,9 +205,8 @@ class Contact {
 		var result:DetectorResult = _detectorResult;
 		_detector.detect(result, _s1._geom, _s2._geom, _s1._transform, _s2._transform, _cachedDetectorData);
 
-		var num:Int = result.numPoints;
-		_touching = num > 0;
-		if (!_touching && _triggering) _triggering = false;
+		_touching = result.numPoints > 0;
+		_triggering = _touching && (_s1._isTrigger || _s2._isTrigger);
 
 		if (_touching) {
 			// update manifold basis
@@ -228,8 +229,6 @@ class Contact {
 				// one-shot manifold
 				_updater.totalUpdate(result, _b1._transform, _b2._transform);
 			}
-
-			if (_s1._isTrigger || _s2._isTrigger) _triggering = true;
 		} else {
 			_manifold._clear();
 		}
