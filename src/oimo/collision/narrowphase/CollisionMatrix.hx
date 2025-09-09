@@ -6,6 +6,7 @@ import oimo.collision.narrowphase.detector.GjkEpaDetector;
 import oimo.collision.narrowphase.detector.SphereBoxDetector;
 import oimo.collision.narrowphase.detector.SphereCapsuleDetector;
 import oimo.collision.narrowphase.detector.SphereSphereDetector;
+import oimo.collision.narrowphase.detector.StaticMeshDetector;
 import oimo.collision.geometry.GeometryType;
 import oimo.collision.narrowphase.detector.*;
 
@@ -19,7 +20,7 @@ class CollisionMatrix {
 	@:dox(hide)
 	public function new() {
 		detectors = new Vector<Vector<Detector>>(8);
-		for (i in 0...6) {
+		for (i in 0...7) {
 			detectors[i] = new Vector<Detector>(8);
 		}
 
@@ -31,6 +32,7 @@ class CollisionMatrix {
 		var co:Int = GeometryType._CONE;
 		var ca:Int = GeometryType._CAPSULE;
 		var ch:Int = GeometryType._CONVEX_HULL;
+		var sm:Int = GeometryType._STATIC_MESH;
 
 		detectors[sp][sp] = new SphereSphereDetector();
 		detectors[sp][bo] = new SphereBoxDetector(false);
@@ -73,6 +75,22 @@ class CollisionMatrix {
 		detectors[ch][co] = gjkEpaDetector;
 		detectors[ch][ca] = gjkEpaDetector;
 		detectors[ch][ch] = gjkEpaDetector;
+
+		// Static mesh detectors
+		detectors[sp][sm] = new StaticMeshDetector(false); // Sphere vs StaticMesh
+		detectors[bo][sm] = null; // Box vs StaticMesh not implemented yet
+		detectors[cy][sm] = null; // Cylinder vs StaticMesh not implemented yet
+		detectors[co][sm] = null; // Cone vs StaticMesh not implemented yet
+		detectors[ca][sm] = null; // Capsule vs StaticMesh not implemented yet
+		detectors[ch][sm] = null; // ConvexHull vs StaticMesh not implemented yet
+
+		detectors[sm][sp] = new StaticMeshDetector(true); // StaticMesh vs Sphere
+		detectors[sm][bo] = null; // StaticMesh vs Box not implemented yet
+		detectors[sm][cy] = null; // StaticMesh vs Cylinder not implemented yet
+		detectors[sm][co] = null; // StaticMesh vs Cone not implemented yet
+		detectors[sm][ca] = null; // StaticMesh vs Capsule not implemented yet
+		detectors[sm][ch] = null; // StaticMesh vs ConvexHull not implemented yet
+		detectors[sm][sm] = null; // StaticMesh vs StaticMesh not needed (both static)
 	}
 
 	// --- public ---
