@@ -6,7 +6,7 @@ import oimo.collision.narrowphase.detector.GjkEpaDetector;
 import oimo.collision.narrowphase.detector.SphereBoxDetector;
 import oimo.collision.narrowphase.detector.SphereCapsuleDetector;
 import oimo.collision.narrowphase.detector.SphereSphereDetector;
-import oimo.collision.narrowphase.detector.SphereStaticMeshDetector;
+import oimo.collision.narrowphase.detector.ConvexStaticMeshDetector;
 import oimo.collision.geometry.GeometryType;
 import oimo.collision.narrowphase.detector.*;
 
@@ -76,21 +76,22 @@ class CollisionMatrix {
 		detectors[ch][ca] = gjkEpaDetector;
 		detectors[ch][ch] = gjkEpaDetector;
 
-		// Static mesh detectors
-		detectors[sp][sm] = new SphereStaticMeshDetector(false); // Sphere vs StaticMesh
-		detectors[bo][sm] = null; // Box vs StaticMesh not implemented yet
-		detectors[cy][sm] = null; // Cylinder vs StaticMesh not implemented yet
-		detectors[co][sm] = null; // Cone vs StaticMesh not implemented yet
-		detectors[ca][sm] = null; // Capsule vs StaticMesh not implemented yet
-		detectors[ch][sm] = null; // ConvexHull vs StaticMesh not implemented yet
+		// Static mesh detectors - single detector handles all convex shapes
+		var convexStaticMeshDetector = new ConvexStaticMeshDetector(false);
+		detectors[sp][sm] = convexStaticMeshDetector; // Sphere vs StaticMesh
+		detectors[bo][sm] = convexStaticMeshDetector; // Box vs StaticMesh
+		detectors[cy][sm] = convexStaticMeshDetector; // Cylinder vs StaticMesh
+		detectors[co][sm] = convexStaticMeshDetector; // Cone vs StaticMesh
+		detectors[ca][sm] = convexStaticMeshDetector; // Capsule vs StaticMesh
+		detectors[ch][sm] = convexStaticMeshDetector; // ConvexHull vs StaticMesh
 
-		detectors[sm][sp] = new SphereStaticMeshDetector(true); // StaticMesh vs Sphere
-		detectors[sm][bo] = null; // StaticMesh vs Box not implemented yet
-		detectors[sm][cy] = null; // StaticMesh vs Cylinder not implemented yet
-		detectors[sm][co] = null; // StaticMesh vs Cone not implemented yet
-		detectors[sm][ca] = null; // StaticMesh vs Capsule not implemented yet
-		detectors[sm][ch] = null; // StaticMesh vs ConvexHull not implemented yet
-		detectors[sm][sm] = null; // StaticMesh vs StaticMesh not needed (both static)
+		var convexStaticMeshDetectorSwapped = new ConvexStaticMeshDetector(true);
+		detectors[sm][sp] = convexStaticMeshDetectorSwapped; // StaticMesh vs Sphere
+		detectors[sm][bo] = convexStaticMeshDetectorSwapped; // StaticMesh vs Box
+		detectors[sm][cy] = convexStaticMeshDetectorSwapped; // StaticMesh vs Cylinder
+		detectors[sm][co] = convexStaticMeshDetectorSwapped; // StaticMesh vs Cone
+		detectors[sm][ca] = convexStaticMeshDetectorSwapped; // StaticMesh vs Capsule
+		detectors[sm][ch] = convexStaticMeshDetectorSwapped; // StaticMesh vs ConvexHull
 	}
 
 	// --- public ---
