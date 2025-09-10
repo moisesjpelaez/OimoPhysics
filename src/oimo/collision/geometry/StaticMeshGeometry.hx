@@ -61,8 +61,6 @@ class StaticMeshGeometry extends Geometry {
 		out.copyFrom(_normals[triangleIndex]);
 	}
 
-
-
 	public function queryTriangles(aabb:Aabb):Array<Int> {
 		var results:Array<Int> = [];
 		_queryBVHRecursive(_triangleBVH._root, aabb, results);
