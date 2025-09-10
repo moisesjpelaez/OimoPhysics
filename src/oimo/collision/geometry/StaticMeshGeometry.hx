@@ -1,5 +1,7 @@
 package oimo.collision.geometry;
 import haxe.ds.Vector;
+import oimo.collision.broadphase.bvh.BvhTree;
+import oimo.collision.broadphase.bvh.BvhProxy;
 import oimo.common.MathUtil;
 import oimo.common.Transform;
 import oimo.common.Vec3;
@@ -10,6 +12,9 @@ import oimo.m.M;
  * Static mesh collision geometry.
  * Non-convex geometry that exposes triangle queries and raycast support.
  * Designed to work with specialized detectors (e.g. sphere vs static mesh).
+ *
+ * Performance: Uses BVH (Bounding Volume Hierarchy) for O(log n) triangle queries
+ * instead of O(n) linear search. Suitable for meshes with thousands of triangles.
  */
 @:build(oimo.m.B.bu())
 class StaticMeshGeometry extends Geometry {
@@ -19,6 +24,9 @@ class StaticMeshGeometry extends Geometry {
 	public var _numVertices:Int;
 	public var _numTriangles:Int;
 	var _triangleAABBs:Vector<Aabb>;
+	var _triangleBVH:BvhTree;
+	var _triangleProxies:Vector<BvhProxy>;
+	var _nextProxyId:Int;
 
 	public function new(vertices:Array<Vec3>, indices:Array<Int>, computeNormals:Bool = true) {
 		super(GeometryType._STATIC_MESH);
@@ -36,6 +44,7 @@ class StaticMeshGeometry extends Geometry {
 		else for (i in 0..._numTriangles) _normals[i] = new Vec3(0,1,0);
 
 		_buildTriangleAABBs();
+		_buildTriangleBVH();
 		_updateMass();
 	}
 
@@ -60,9 +69,33 @@ class StaticMeshGeometry extends Geometry {
 	public function getTriangleAABB(triangleIndex:Int):Aabb { return _triangleAABBs[triangleIndex]; }
 
 	public function queryTriangles(aabb:Aabb):Array<Int> {
-		var res = [];
-		for (i in 0..._numTriangles) if (_triangleAABBs[i].overlap(aabb)) res.push(i);
-		return res;
+		var results:Array<Int> = [];
+
+		// BVH-optimized query - O(log n)
+		_queryBVHRecursive(_triangleBVH._root, aabb, results);
+
+		return results;
+	}
+
+	function _queryBVHRecursive(node:oimo.collision.broadphase.bvh.BvhNode, queryAABB:Aabb, results:Array<Int>):Void {
+		if (node == null) return;
+
+		// Check if node's AABB overlaps with query AABB
+		var nodeAABB = new Aabb();
+		M.vec3_assign(nodeAABB._min, node._aabbMin);
+		M.vec3_assign(nodeAABB._max, node._aabbMax);
+
+		if (!nodeAABB.overlap(queryAABB)) return;
+
+		if (node._height == 0) { // Leaf node
+			// Add triangle index to results
+			var triangleIndex:Int = cast node._proxy.userData;
+			results.push(triangleIndex);
+		} else { // Internal node
+			// Recursively traverse children
+			_queryBVHRecursive(node._children[0], queryAABB, results);
+			_queryBVHRecursive(node._children[1], queryAABB, results);
+		}
 	}
 
 	public function closestPointOnTriangle(point:Vec3, v1:Vec3, v2:Vec3, v3:Vec3, closestPoint:Vec3):{ u:Float, v:Float, w:Float } {
@@ -250,6 +283,20 @@ class StaticMeshGeometry extends Geometry {
 			var maxx = Math.max(v1.x, Math.max(v2.x, v3.x)); var maxy = Math.max(v1.y, Math.max(v2.y, v3.y)); var maxz = Math.max(v1.z, Math.max(v2.z, v3.z));
 			M.vec3_set(aabb._min, minx, miny, minz); M.vec3_set(aabb._max, maxx, maxy, maxz);
 			_triangleAABBs[i] = aabb;
+		}
+	}
+
+	function _buildTriangleBVH():Void {
+		_triangleBVH = new BvhTree();
+		_triangleProxies = new Vector<BvhProxy>(_numTriangles);
+		_nextProxyId = 0;
+
+		// Create a BVH proxy for each triangle
+		for (i in 0..._numTriangles) {
+			var proxy = new BvhProxy(i, _nextProxyId++); // triangle index as userData
+			proxy._setAabb(_triangleAABBs[i]);
+			_triangleBVH._insertProxy(proxy);
+			_triangleProxies[i] = proxy;
 		}
 	}
 
