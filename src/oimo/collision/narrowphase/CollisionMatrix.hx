@@ -78,20 +78,20 @@ class CollisionMatrix {
 
 		// Static mesh detectors - single detector handles all convex shapes
 		var convexStaticMeshDetector = new ConvexStaticMeshDetector(false);
-		detectors[sp][sm] = convexStaticMeshDetector; // Sphere vs StaticMesh
-		detectors[bo][sm] = convexStaticMeshDetector; // Box vs StaticMesh
-		detectors[cy][sm] = convexStaticMeshDetector; // Cylinder vs StaticMesh
-		detectors[co][sm] = convexStaticMeshDetector; // Cone vs StaticMesh
-		detectors[ca][sm] = convexStaticMeshDetector; // Capsule vs StaticMesh
-		detectors[ch][sm] = convexStaticMeshDetector; // ConvexHull vs StaticMesh
+		detectors[sp][sm] = convexStaticMeshDetector;
+		detectors[bo][sm] = convexStaticMeshDetector;
+		detectors[cy][sm] = convexStaticMeshDetector;
+		detectors[co][sm] = convexStaticMeshDetector;
+		detectors[ca][sm] = convexStaticMeshDetector;
+		detectors[ch][sm] = convexStaticMeshDetector;
 
 		var convexStaticMeshDetectorSwapped = new ConvexStaticMeshDetector(true);
-		detectors[sm][sp] = convexStaticMeshDetectorSwapped; // StaticMesh vs Sphere
-		detectors[sm][bo] = convexStaticMeshDetectorSwapped; // StaticMesh vs Box
-		detectors[sm][cy] = convexStaticMeshDetectorSwapped; // StaticMesh vs Cylinder
-		detectors[sm][co] = convexStaticMeshDetectorSwapped; // StaticMesh vs Cone
-		detectors[sm][ca] = convexStaticMeshDetectorSwapped; // StaticMesh vs Capsule
-		detectors[sm][ch] = convexStaticMeshDetectorSwapped; // StaticMesh vs ConvexHull
+		detectors[sm][sp] = convexStaticMeshDetectorSwapped;
+		detectors[sm][bo] = convexStaticMeshDetectorSwapped;
+		detectors[sm][cy] = convexStaticMeshDetectorSwapped;
+		detectors[sm][co] = convexStaticMeshDetectorSwapped;
+		detectors[sm][ca] = convexStaticMeshDetectorSwapped;
+		detectors[sm][ch] = convexStaticMeshDetectorSwapped;
 	}
 
 	// --- public ---

@@ -93,7 +93,7 @@ class ConvexStaticMeshDetector extends Detector {
 		// If we found a collision, create the contact
 		if (closestTriangle >= 0) {
 			// Calculate actual penetration using support vertex
-			var penetrationDepth = calculatePenetrationDepth(convex, tf1, tf2, closestNormalLocal, boundingRadius - closestDistance);
+			var penetrationDepth = calculatePenetrationDepth(convex, tf1, tf2, closestNormalLocal, closestPointLocal, boundingRadius - closestDistance);
 
 			if (penetrationDepth > 0) {
 				// Transform collision normal back to world space
@@ -130,27 +130,116 @@ class ConvexStaticMeshDetector extends Detector {
 	}
 
 	private function getBoundingRadius(convex:ConvexGeometry):Float {
-		// For different convex shapes, we can use different strategies
-		// For now, use a conservative approach
+		// Calculate accurate bounding radius for each shape type
 		switch (convex._type) {
 			case GeometryType._SPHERE:
 				var sphere:SphereGeometry = cast convex;
 				return sphere.getRadius();
 			case GeometryType._BOX:
-				// Conservative estimate for box
-				return convex._gjkMargin * 50; // Larger for boxes
+				// Accurate bounding radius: distance from center to corner
+				var box:BoxGeometry = cast convex;
+				var halfExtents = box.getHalfExtents();
+				var hw = halfExtents.x;
+				var hh = halfExtents.y;
+				var hd = halfExtents.z;
+				return Math.sqrt(hw * hw + hh * hh + hd * hd);
 			case GeometryType._CAPSULE:
-				// Conservative estimate for capsule
-				return convex._gjkMargin * 30;
+				// Accurate bounding radius: half-length plus radius
+				var capsule:CapsuleGeometry = cast convex;
+				return capsule.getHalfHeight() + capsule.getRadius();
+			case GeometryType._CYLINDER:
+				// Accurate bounding radius for cylinder
+				var cylinder:CylinderGeometry = cast convex;
+				var hr = cylinder.getRadius();
+				var hh = cylinder.getHalfHeight();
+				return Math.sqrt(hr * hr + hh * hh);
+			case GeometryType._CONE:
+				// Accurate bounding radius for cone
+				var cone:ConeGeometry = cast convex;
+				var hr = cone.getRadius();
+				var hh = cone.getHalfHeight();
+				return Math.sqrt(hr * hr + hh * hh);
 			default:
-				// Very conservative for unknown shapes
-				return convex._gjkMargin * 20;
+				// For convex hulls and unknown shapes, compute actual bounding radius
+				return computeBoundingRadius(convex);
 		}
 	}
 
-	private function calculatePenetrationDepth(convex:ConvexGeometry, tf1:Transform, tf2:Transform, normal:Vec3, estimatedDepth:Float):Float {
-		// For now, use the estimated depth
-		// In a full implementation, we'd do a more precise calculation using support vertices
-		return Math.max(0, estimatedDepth);
+	private function calculatePenetrationDepth(convex:ConvexGeometry, tf1:Transform, tf2:Transform, normal:Vec3, closestPoint:Vec3, estimatedDepth:Float):Float {
+		// Use support vertices for more accurate penetration depth calculation
+		switch (convex._type) {
+			case GeometryType._SPHERE:
+				// For spheres, the estimated depth is already accurate
+				return Math.max(0, estimatedDepth);
+
+			default:
+				// For other convex shapes, use support function for better accuracy
+				var supportDir = new Vec3().copyFrom(normal).scaleEq(-1); // Direction towards mesh
+				var supportPoint = new Vec3();
+				convex.computeLocalSupportingVertex(supportDir, supportPoint);
+
+				// Transform support point to mesh local space
+				var supportWorldPos:IVec3;
+				M.vec3_fromVec3(supportWorldPos, supportPoint);
+				M.vec3_mulMat3(supportWorldPos, supportWorldPos, tf1._rotation);
+				M.vec3_add(supportWorldPos, supportWorldPos, tf1._position);
+
+				// Convert to mesh local space
+				var supportInMesh:IVec3;
+				M.vec3_sub(supportInMesh, supportWorldPos, tf2._position);
+				M.vec3_mulMat3Transposed(supportInMesh, supportInMesh, tf2._rotation);
+
+				var supportInMeshVec3 = new Vec3();
+				M.vec3_toVec3(supportInMeshVec3, supportInMesh);
+
+				// Calculate distance from support point to triangle in normal direction
+				// This gives us a more accurate penetration depth
+				var supportToTriangleCenter = supportInMeshVec3.sub(closestPoint);
+				var projectedDistance = supportToTriangleCenter.dot(normal);
+
+				// Return the positive penetration depth
+				return Math.max(0, -projectedDistance);
+		}
+	}
+
+	private function computeBoundingRadius(convex:ConvexGeometry):Float {
+		// For unknown convex shapes, compute the actual bounding radius by sampling
+		// support vertices in multiple directions to find the maximum distance from center
+		var maxRadius:Float = 0.0;
+		var supportPoint = new Vec3();
+
+		// Sample directions: axis-aligned directions
+		var directions = [
+			new Vec3(1, 0, 0), new Vec3(-1, 0, 0),    // +X, -X
+			new Vec3(0, 1, 0), new Vec3(0, -1, 0),    // +Y, -Y
+			new Vec3(0, 0, 1), new Vec3(0, 0, -1),    // +Z, -Z
+		];
+
+		// Also sample some diagonal directions for better coverage
+		var sqrt3inv = 1.0 / Math.sqrt(3.0);
+		var sqrt2inv = 1.0 / Math.sqrt(2.0);
+		directions.push(new Vec3(sqrt3inv, sqrt3inv, sqrt3inv));   // +X+Y+Z
+		directions.push(new Vec3(-sqrt3inv, -sqrt3inv, -sqrt3inv)); // -X-Y-Z
+		directions.push(new Vec3(sqrt3inv, sqrt3inv, -sqrt3inv));   // +X+Y-Z
+		directions.push(new Vec3(sqrt3inv, -sqrt3inv, sqrt3inv));   // +X-Y+Z
+		directions.push(new Vec3(-sqrt3inv, sqrt3inv, sqrt3inv));   // -X+Y+Z
+		directions.push(new Vec3(sqrt2inv, sqrt2inv, 0));          // +X+Y
+		directions.push(new Vec3(sqrt2inv, -sqrt2inv, 0));         // +X-Y
+		directions.push(new Vec3(sqrt2inv, 0, sqrt2inv));          // +X+Z
+		directions.push(new Vec3(sqrt2inv, 0, -sqrt2inv));         // +X-Z
+		directions.push(new Vec3(0, sqrt2inv, sqrt2inv));          // +Y+Z
+		directions.push(new Vec3(0, sqrt2inv, -sqrt2inv));         // +Y-Z
+
+		// Find the support vertex in each direction and compute distance from origin
+		for (dir in directions) {
+			convex.computeLocalSupportingVertex(dir, supportPoint);
+			var distance = supportPoint.length();
+			if (distance > maxRadius) {
+				maxRadius = distance;
+			}
+		}
+
+		// Add a small margin for safety (in case our sampling missed the true maximum)
+		return maxRadius + convex._gjkMargin;
 	}
 }
