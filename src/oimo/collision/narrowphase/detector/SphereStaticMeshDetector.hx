@@ -11,7 +11,7 @@ import oimo.m.M;
  * Sphere vs StaticMesh collision detector.
  */
 @:build(oimo.m.B.bu())
-class StaticMeshDetector extends Detector {
+class SphereStaticMeshDetector extends Detector {
 
 	public function new(swapped:Bool = false) {
 		super(swapped);

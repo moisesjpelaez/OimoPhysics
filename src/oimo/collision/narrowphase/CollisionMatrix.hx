@@ -6,7 +6,7 @@ import oimo.collision.narrowphase.detector.GjkEpaDetector;
 import oimo.collision.narrowphase.detector.SphereBoxDetector;
 import oimo.collision.narrowphase.detector.SphereCapsuleDetector;
 import oimo.collision.narrowphase.detector.SphereSphereDetector;
-import oimo.collision.narrowphase.detector.StaticMeshDetector;
+import oimo.collision.narrowphase.detector.SphereStaticMeshDetector;
 import oimo.collision.geometry.GeometryType;
 import oimo.collision.narrowphase.detector.*;
 
@@ -77,14 +77,14 @@ class CollisionMatrix {
 		detectors[ch][ch] = gjkEpaDetector;
 
 		// Static mesh detectors
-		detectors[sp][sm] = new StaticMeshDetector(false); // Sphere vs StaticMesh
+		detectors[sp][sm] = new SphereStaticMeshDetector(false); // Sphere vs StaticMesh
 		detectors[bo][sm] = null; // Box vs StaticMesh not implemented yet
 		detectors[cy][sm] = null; // Cylinder vs StaticMesh not implemented yet
 		detectors[co][sm] = null; // Cone vs StaticMesh not implemented yet
 		detectors[ca][sm] = null; // Capsule vs StaticMesh not implemented yet
 		detectors[ch][sm] = null; // ConvexHull vs StaticMesh not implemented yet
 
-		detectors[sm][sp] = new StaticMeshDetector(true); // StaticMesh vs Sphere
+		detectors[sm][sp] = new SphereStaticMeshDetector(true); // StaticMesh vs Sphere
 		detectors[sm][bo] = null; // StaticMesh vs Box not implemented yet
 		detectors[sm][cy] = null; // StaticMesh vs Cylinder not implemented yet
 		detectors[sm][co] = null; // StaticMesh vs Cone not implemented yet
