@@ -9,12 +9,7 @@ import oimo.m.IVec3;
 import oimo.m.M;
 
 /**
- * Static mesh collision geometry.
- * Non-convex geometry that exposes triangle queries and raycast support.
- * Designed to work with specialized detectors (e.g. sphere vs static mesh).
- *
- * Performance: Uses BVH (Bounding Volume Hierarchy) for O(log n) triangle queries
- * instead of O(n) linear search. Suitable for meshes with thousands of triangles.
+ * Static mesh collision geometry with BVH spatial queries.
  */
 @:build(oimo.m.B.bu())
 class StaticMeshGeometry extends Geometry {
@@ -66,117 +61,30 @@ class StaticMeshGeometry extends Geometry {
 		out.copyFrom(_normals[triangleIndex]);
 	}
 
-	public function getTriangleAABB(triangleIndex:Int):Aabb { return _triangleAABBs[triangleIndex]; }
+
 
 	public function queryTriangles(aabb:Aabb):Array<Int> {
 		var results:Array<Int> = [];
-
-		// BVH-optimized query - O(log n)
 		_queryBVHRecursive(_triangleBVH._root, aabb, results);
-
 		return results;
 	}
 
 	function _queryBVHRecursive(node:oimo.collision.broadphase.bvh.BvhNode, queryAABB:Aabb, results:Array<Int>):Void {
 		if (node == null) return;
 
-		// Check if node's AABB overlaps with query AABB
 		var nodeAABB = new Aabb();
 		M.vec3_assign(nodeAABB._min, node._aabbMin);
 		M.vec3_assign(nodeAABB._max, node._aabbMax);
 
 		if (!nodeAABB.overlap(queryAABB)) return;
 
-		if (node._height == 0) { // Leaf node
-			// Add triangle index to results
+		if (node._height == 0) {
 			var triangleIndex:Int = cast node._proxy.userData;
 			results.push(triangleIndex);
-		} else { // Internal node
-			// Recursively traverse children
+		} else {
 			_queryBVHRecursive(node._children[0], queryAABB, results);
 			_queryBVHRecursive(node._children[1], queryAABB, results);
 		}
-	}
-
-	public function closestPointOnTriangle(point:Vec3, v1:Vec3, v2:Vec3, v3:Vec3, closestPoint:Vec3):{ u:Float, v:Float, w:Float } {
-		// same algorithm used in many places; compute barycentric coords and closest point
-		var edge1 = new Vec3().copyFrom(v2).subEq(v1);
-		var edge2 = new Vec3().copyFrom(v3).subEq(v1);
-		var v0 = new Vec3().copyFrom(v1).subEq(point);
-
-		var a = edge1.dot(edge1);
-		var b = edge1.dot(edge2);
-		var c = edge2.dot(edge2);
-		var d = edge1.dot(v0);
-		var e = edge2.dot(v0);
-
-		var det = a * c - b * b;
-		var s = b * e - c * d;
-		var t = b * d - a * e;
-
-		if (s + t <= det) {
-			if (s < 0) {
-				if (t < 0) {
-					if (d < 0) {
-						t = 0;
-						s = (-d >= a) ? 1 : -d / a;
-					} else {
-						s = 0;
-						t = (e >= 0) ? 0 : ((-e >= c) ? 1 : -e / c);
-					}
-				} else {
-					s = 0;
-					t = (e >= 0) ? 0 : ((-e >= c) ? 1 : -e / c);
-				}
-			} else if (t < 0) {
-				t = 0;
-				s = (d >= 0) ? 0 : ((-d >= a) ? 1 : -d / a);
-			} else {
-				var invDet = 1 / det;
-				s *= invDet;
-				t *= invDet;
-			}
-		} else {
-			if (s < 0) {
-				var tmp0 = b + d;
-				var tmp1 = c + e;
-				if (tmp1 > tmp0) {
-					var numer = tmp1 - tmp0;
-					var denom = a - 2 * b + c;
-					s = (numer >= denom) ? 1 : numer / denom;
-					t = 1 - s;
-				} else {
-					s = 0;
-					t = (tmp1 <= 0) ? 1 : ((e >= 0) ? 0 : -e / c);
-				}
-			} else if (t < 0) {
-				var tmp0 = b + e;
-				var tmp1 = a + d;
-				if (tmp1 > tmp0) {
-					var numer = tmp1 - tmp0;
-					var denom = a - 2 * b + c;
-					t = (numer >= denom) ? 1 : numer / denom;
-					s = 1 - t;
-				} else {
-					t = 0;
-					s = (tmp1 <= 0) ? 1 : ((d >= 0) ? 0 : -d / a);
-				}
-			} else {
-				var numer = c + e - b - d;
-				if (numer <= 0) s = 0; else {
-					var denom = a - 2 * b + c;
-					s = (numer >= denom) ? 1 : numer / denom;
-				}
-				t = 1 - s;
-			}
-		}
-
-		var u = 1 - s - t;
-		var v = s;
-		var w = t;
-
-		closestPoint.copyFrom(v1).scaleEq(u).addScaledEq(v2, v).addScaledEq(v3, w);
-		return { u: u, v: v, w: w };
 	}
 
 	override public function _rayCastLocal(begin:IVec3, end:IVec3, hit:RayCastHit):Bool {
@@ -228,7 +136,6 @@ class StaticMeshGeometry extends Geometry {
 	}
 
 	override public function _updateMass():Void {
-		// approximate volume using AABB
 		var minx = MathUtil.POSITIVE_INFINITY; var miny = MathUtil.POSITIVE_INFINITY; var minz = MathUtil.POSITIVE_INFINITY;
 		var maxx = MathUtil.NEGATIVE_INFINITY; var maxy = MathUtil.NEGATIVE_INFINITY; var maxz = MathUtil.NEGATIVE_INFINITY;
 		for (i in 0..._numVertices) {
@@ -291,9 +198,8 @@ class StaticMeshGeometry extends Geometry {
 		_triangleProxies = new Vector<BvhProxy>(_numTriangles);
 		_nextProxyId = 0;
 
-		// Create a BVH proxy for each triangle
 		for (i in 0..._numTriangles) {
-			var proxy = new BvhProxy(i, _nextProxyId++); // triangle index as userData
+			var proxy = new BvhProxy(i, _nextProxyId++);
 			proxy._setAabb(_triangleAABBs[i]);
 			_triangleBVH._insertProxy(proxy);
 			_triangleProxies[i] = proxy;

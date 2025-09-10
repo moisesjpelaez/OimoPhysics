@@ -23,12 +23,9 @@ class ConvexStaticMeshDetector extends Detector {
 
 		result.incremental = false;
 
-		// Query potentially colliding triangles using world-space AABB
 		var aabb:Aabb = new Aabb();
 		convex._computeAabb(aabb, tf1);
 		var triangleIndices:Array<Int> = staticMesh.queryTriangles(aabb);
-
-		// Early exit if no triangles
 		if (triangleIndices.length == 0) {
 			return;
 		}
@@ -40,60 +37,68 @@ class ConvexStaticMeshDetector extends Detector {
 		var bestContactPointConvex:Vec3 = new Vec3();
 		var bestContactPointMesh:Vec3 = new Vec3();
 
-		// Test each potentially colliding triangle using GJK/EPA
+		// Reuse triangle geometry to avoid allocations
+		var triangleVertices:Array<Vec3> = [new Vec3(), new Vec3(), new Vec3()];
+		var triangleGeom:ConvexHullGeometry = null;
 		for (triangleIndex in triangleIndices) {
-			var v1 = new Vec3();
-			var v2 = new Vec3();
-			var v3 = new Vec3();
-			staticMesh.getTriangleVertices(triangleIndex, v1, v2, v3);
+			staticMesh.getTriangleVertices(triangleIndex, triangleVertices[0], triangleVertices[1], triangleVertices[2]);
 
-			// Create triangle geometry using ConvexHullGeometry
-			var triangleVertices:Array<Vec3> = [v1, v2, v3];
-			var triangleGeom = new ConvexHullGeometry(triangleVertices);
-			triangleGeom._gjkMargin = 0.0; // Triangle has no margin
+			var v1 = triangleVertices[0];
+			var v2 = triangleVertices[1];
+			var v3 = triangleVertices[2];
 
-			// Use GJK/EPA to compute collision between convex and triangle
-			// Triangle is already in mesh local space, so use tf2 directly
+			// Skip degenerate triangles
+			var edge1 = new Vec3().copyFrom(v2).subEq(v1);
+			var edge2 = new Vec3().copyFrom(v3).subEq(v1);
+			var cross = edge1.cross(edge2);
+			if (cross.lengthSq() < 1e-12) {
+				continue;
+			}
+
+			if (triangleGeom == null) {
+				triangleGeom = new ConvexHullGeometry(triangleVertices);
+			} else {
+				triangleGeom._vertices[0].copyFrom(v1);
+				triangleGeom._vertices[1].copyFrom(v2);
+				triangleGeom._vertices[2].copyFrom(v3);
+				triangleGeom._updateMass();
+			}
+			triangleGeom._gjkMargin = 0.0;
+
 			var status:Int = gjkEpa.computeClosestPoints(convex, triangleGeom, tf1, tf2, null);
 
 			if (status != GjkEpaResultState.SUCCEEDED) {
-				continue; // Skip this triangle if GJK/EPA failed
+				continue;
 			}
 
 			var margin1:Float = convex._gjkMargin;
 			var margin2:Float = triangleGeom._gjkMargin;
 
 			if (gjkEpa.distance > margin1 + margin2) {
-				continue; // No collision with this triangle
+				continue;
 			}
 
-			// Calculate penetration depth (similar to GjkEpaDetector)
 			var penetrationDepth:Float = margin1 + margin2 - gjkEpa.distance;
 
-			// Keep track of the deepest penetration
 			if (penetrationDepth > bestPenetrationDepth) {
 				bestPenetrationDepth = penetrationDepth;
 				bestContactFound = true;
 
-				// Calculate collision normal (from triangle to convex)
 				bestNormalWorld.copyFrom(gjkEpa.closestPoint1).subEq(gjkEpa.closestPoint2);
 				if (gjkEpa.distance < 0) {
 					bestNormalWorld.negateEq();
 				}
 				bestNormalWorld.normalize();
 
-				// Calculate contact points (similar to GjkEpaDetector)
 				bestContactPointConvex.copyFrom(gjkEpa.closestPoint1).addScaledEq(bestNormalWorld, -margin1);
 				bestContactPointMesh.copyFrom(gjkEpa.closestPoint2).addScaledEq(bestNormalWorld, margin2);
 			}
 		}
 
-		// If we found a collision, create the contact
 		if (bestContactFound) {
 			var normalInWorld:IVec3;
 			M.vec3_fromVec3(normalInWorld, bestNormalWorld);
 
-			// Set collision normal (this handles the swapped case automatically)
 			setNormal(result, M.vec3_get(normalInWorld, 0), M.vec3_get(normalInWorld, 1), M.vec3_get(normalInWorld, 2));
 
 			var contactPointConvex:IVec3;
@@ -101,7 +106,6 @@ class ConvexStaticMeshDetector extends Detector {
 			M.vec3_fromVec3(contactPointConvex, bestContactPointConvex);
 			M.vec3_fromVec3(contactPointMesh, bestContactPointMesh);
 
-			// Add contact point (this handles the swapped case automatically)
 			addPoint(result,
 				M.vec3_get(contactPointConvex, 0), M.vec3_get(contactPointConvex, 1), M.vec3_get(contactPointConvex, 2),
 				M.vec3_get(contactPointMesh, 0), M.vec3_get(contactPointMesh, 1), M.vec3_get(contactPointMesh, 2),
