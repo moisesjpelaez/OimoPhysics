@@ -1,7 +1,8 @@
 package oimo.collision.geometry;
 import haxe.ds.Vector;
-import oimo.collision.broadphase.bvh.BvhTree;
+import oimo.collision.broadphase.bvh.BvhNode;
 import oimo.collision.broadphase.bvh.BvhProxy;
+import oimo.collision.broadphase.bvh.BvhTree;
 import oimo.common.MathUtil;
 import oimo.common.Transform;
 import oimo.common.Vec3;
@@ -67,7 +68,7 @@ class StaticMeshGeometry extends Geometry {
 		return results;
 	}
 
-	function _queryBVHRecursive(node:oimo.collision.broadphase.bvh.BvhNode, queryAABB:Aabb, results:Array<Int>):Void {
+	function _queryBVHRecursive(node:BvhNode, queryAABB:Aabb, results:Array<Int>):Void {
 		if (node == null) return;
 
 		var nodeAABB = new Aabb();
@@ -94,11 +95,28 @@ class StaticMeshGeometry extends Geometry {
 		var rayLength:Float = MathUtil.sqrt(rayLengthSq);
 		M.vec3_scale(rayDir, rayDir, 1.0 / rayLength);
 
+		var rayAABB = new Aabb();
+		var beginX = M.vec3_get(begin, 0); var beginY = M.vec3_get(begin, 1); var beginZ = M.vec3_get(begin, 2);
+		var endX = M.vec3_get(end, 0); var endY = M.vec3_get(end, 1); var endZ = M.vec3_get(end, 2);
+		M.vec3_set(rayAABB._min,
+			beginX < endX ? beginX : endX,
+			beginY < endY ? beginY : endY,
+			beginZ < endZ ? beginZ : endZ
+		);
+		M.vec3_set(rayAABB._max,
+			beginX > endX ? beginX : endX,
+			beginY > endY ? beginY : endY,
+			beginZ > endZ ? beginZ : endZ
+		);
+
+		var triangles = queryTriangles(rayAABB);
+
 		var closestT:Float = MathUtil.POSITIVE_INFINITY;
 		var closestTriangle:Int = -1;
 
-		for (i in 0..._numTriangles) {
-			var idx:Int = i * 3;
+		for (i in 0...triangles.length) {
+			var triangleIdx = triangles[i];
+			var idx:Int = triangleIdx * 3;
 			var i1:Int = _indices[idx];
 			var i2:Int = _indices[idx + 1];
 			var i3:Int = _indices[idx + 2];
@@ -129,7 +147,7 @@ class StaticMeshGeometry extends Geometry {
 
 			if (t > 1e-6 && t <= rayLength && t < closestT) {
 				closestT = t;
-				closestTriangle = i;
+				closestTriangle = triangleIdx;
 			}
 		}
 
