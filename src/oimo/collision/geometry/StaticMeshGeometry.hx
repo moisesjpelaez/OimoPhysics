@@ -86,46 +86,62 @@ class StaticMeshGeometry extends Geometry {
 	}
 
 	override public function _rayCastLocal(begin:IVec3, end:IVec3, hit:RayCastHit):Bool {
-		var beginVec3 = new Vec3();
-		var endVec3 = new Vec3();
-		M.vec3_toVec3(beginVec3, begin);
-		M.vec3_toVec3(endVec3, end);
+		var rayDir:IVec3;
+		M.vec3_sub(rayDir, end, begin);
+		var rayLengthSq:Float = M.vec3_dot(rayDir, rayDir);
+		if (rayLengthSq < 1e-12) return false;
 
-		var rayDir = new Vec3().copyFrom(endVec3).subEq(beginVec3);
-		var rayLength = rayDir.length();
-		if (rayLength < 1e-6) return false;
-		rayDir.scaleEq(1.0 / rayLength);
+		var rayLength:Float = MathUtil.sqrt(rayLengthSq);
+		M.vec3_scale(rayDir, rayDir, 1.0 / rayLength);
 
-		var closestT = MathUtil.POSITIVE_INFINITY;
-		var closestTriangle = -1;
-		var closestU = 0.0;
-		var closestV = 0.0;
+		var closestT:Float = MathUtil.POSITIVE_INFINITY;
+		var closestTriangle:Int = -1;
 
 		for (i in 0..._numTriangles) {
-			var v1 = new Vec3(); var v2 = new Vec3(); var v3 = new Vec3();
-			getTriangleVertices(i, v1, v2, v3);
-			var rayHit = _rayTriangleIntersect(beginVec3, rayDir, v1, v2, v3);
-			if (rayHit != null) {
-				if (rayHit.t >= 0 && rayHit.t <= rayLength && rayHit.t < closestT) {
-					closestT = rayHit.t;
-					closestTriangle = i;
-					closestU = rayHit.u;
-					closestV = rayHit.v;
-				}
+			var idx:Int = i * 3;
+			var i1:Int = _indices[idx];
+			var i2:Int = _indices[idx + 1];
+			var i3:Int = _indices[idx + 2];
+
+			var v1:IVec3; M.vec3_fromVec3(v1, _vertices[i1]);
+			var v2:IVec3; M.vec3_fromVec3(v2, _vertices[i2]);
+			var v3:IVec3; M.vec3_fromVec3(v3, _vertices[i3]);
+
+			var edge1:IVec3; M.vec3_sub(edge1, v2, v1);
+			var edge2:IVec3; M.vec3_sub(edge2, v3, v1);
+			var h:IVec3; M.vec3_cross(h, rayDir, edge2);
+			var a:Float = M.vec3_dot(edge1, h);
+
+			if (a > -1e-6 && a < 1e-6) continue;
+
+			var f:Float = 1.0 / a;
+			var s:IVec3; M.vec3_sub(s, begin, v1);
+			var u:Float = f * M.vec3_dot(s, h);
+
+			if (u < 0.0 || u > 1.0) continue;
+
+			var q:IVec3; M.vec3_cross(q, s, edge1);
+			var v:Float = f * M.vec3_dot(rayDir, q);
+
+			if (v < 0.0 || u + v > 1.0) continue;
+
+			var t:Float = f * M.vec3_dot(edge2, q);
+
+			if (t > 1e-6 && t <= rayLength && t < closestT) {
+				closestT = t;
+				closestTriangle = i;
 			}
 		}
 
 		if (closestTriangle >= 0) {
-			var hitPos = new Vec3().copyFrom(beginVec3).addScaledEq(rayDir, closestT);
-			var hitNormal = new Vec3();
-			getTriangleNormal(closestTriangle, hitNormal);
+			var hitPos:IVec3;
+			M.vec3_addRhsScaled(hitPos, begin, rayDir, closestT);
 
-			var hitPosLocal:IVec3; var hitNormalLocal:IVec3;
-			M.vec3_fromVec3(hitPosLocal, hitPos);
-			M.vec3_fromVec3(hitNormalLocal, hitNormal);
+			var hitNormal:IVec3;
+			M.vec3_fromVec3(hitNormal, _normals[closestTriangle]);
 
-			M.vec3_toVec3(hit.position, hitPosLocal);
-			M.vec3_toVec3(hit.normal, hitNormalLocal);
+			M.vec3_toVec3(hit.position, hitPos);
+			M.vec3_toVec3(hit.normal, hitNormal);
 			hit.fraction = closestT / rayLength;
 			return true;
 		}
@@ -202,23 +218,5 @@ class StaticMeshGeometry extends Geometry {
 			_triangleBVH._insertProxy(proxy);
 			_triangleProxies[i] = proxy;
 		}
-	}
-
-	function _rayTriangleIntersect(rayOrigin:Vec3, rayDir:Vec3, v1:Vec3, v2:Vec3, v3:Vec3):{ t:Float, u:Float, v:Float } {
-		var edge1 = new Vec3().copyFrom(v2).subEq(v1);
-		var edge2 = new Vec3().copyFrom(v3).subEq(v1);
-		var h = new Vec3().copyFrom(rayDir).crossEq(edge2);
-		var a = edge1.dot(h);
-		if (a > -1e-6 && a < 1e-6) return null;
-		var f = 1.0 / a;
-		var s = new Vec3().copyFrom(rayOrigin).subEq(v1);
-		var u = f * s.dot(h);
-		if (u < 0.0 || u > 1.0) return null;
-		var q = new Vec3().copyFrom(s).crossEq(edge1);
-		var v = f * rayDir.dot(q);
-		if (v < 0.0 || u + v > 1.0) return null;
-		var t = f * edge2.dot(q);
-		if (t > 1e-6) return { t: t, u: u, v: v };
-		return null;
 	}
 }
