@@ -109,8 +109,7 @@ class StaticMeshGeometry extends Geometry {
 			beginZ > endZ ? beginZ : endZ
 		);
 
-		var triangles = queryTriangles(rayAABB);
-
+		var triangles:Array<Int> = queryTriangles(rayAABB);
 		var closestT:Float = MathUtil.POSITIVE_INFINITY;
 		var closestTriangle:Int = -1;
 
